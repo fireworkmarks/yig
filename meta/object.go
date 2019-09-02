@@ -1,20 +1,23 @@
 package meta
 
 import (
+	"context"
+
 	. "github.com/journeymidnight/yig/error"
 	"github.com/journeymidnight/yig/helper"
 	. "github.com/journeymidnight/yig/meta/types"
 	"github.com/journeymidnight/yig/redis"
 )
 
-func (m *Meta) GetObject(bucketName string, objectName string, willNeed bool) (object *Object, err error) {
+func (m *Meta) GetObject(ctx context.Context, bucketName string, objectName string, willNeed bool) (object *Object, err error) {
 	getObject := func() (o interface{}, err error) {
-		helper.Logger.Println(10, "GetObject CacheMiss. bucket:", bucketName, "object:", objectName)
+		helper.Logger.Println(10, "[", helper.RequestIdFromContext(ctx), "]",
+			"GetObject CacheMiss. bucket:", bucketName, "object:", objectName)
 		object, err := m.Client.GetObject(bucketName, objectName, "")
 		if err != nil {
 			return
 		}
-		helper.Debugln("GetObject object.Name:", object.Name)
+		helper.Debugln("[", helper.RequestIdFromContext(ctx), "]", "GetObject object.Name:", object.Name)
 		if object.Name != objectName {
 			err = ErrNoSuchKey
 			return
@@ -27,7 +30,7 @@ func (m *Meta) GetObject(bucketName string, objectName string, willNeed bool) (o
 		return &object, err
 	}
 
-	o, err := m.Cache.Get(redis.ObjectTable, bucketName+":"+objectName+":",
+	o, err := m.Cache.Get(ctx, redis.ObjectTable, bucketName+":"+objectName+":",
 		getObject, unmarshaller, willNeed)
 	if err != nil {
 		return
@@ -49,7 +52,7 @@ func (m *Meta) GetObjectMap(bucketName, objectName string) (objMap *ObjMap, err 
 	return
 }
 
-func (m *Meta) GetObjectVersion(bucketName, objectName, version string, willNeed bool) (object *Object, err error) {
+func (m *Meta) GetObjectVersion(ctx context.Context, bucketName, objectName, version string, willNeed bool) (object *Object, err error) {
 	getObjectVersion := func() (o interface{}, err error) {
 		object, err := m.Client.GetObject(bucketName, objectName, version)
 		if err != nil {
@@ -66,7 +69,7 @@ func (m *Meta) GetObjectVersion(bucketName, objectName, version string, willNeed
 		err := helper.MsgPackUnMarshal(in, &object)
 		return &object, err
 	}
-	o, err := m.Cache.Get(redis.ObjectTable, bucketName+":"+objectName+":"+version,
+	o, err := m.Cache.Get(ctx, redis.ObjectTable, bucketName+":"+objectName+":"+version,
 		getObjectVersion, unmarshaller, willNeed)
 	if err != nil {
 		return
@@ -175,10 +178,25 @@ func (m *Meta) DeleteObject(object *Object, DeleteMarker bool, objMap *ObjMap) e
 }
 
 func (m *Meta) AppendObject(object *Object, isExist bool) error {
+	tx, err := m.Client.NewTrans()
+	defer func() {
+		if err != nil {
+			m.Client.AbortTrans(tx)
+		}
+	}()
 	if !isExist {
-		return m.Client.PutObject(object, nil)
+		err = m.Client.PutObject(object, tx)
+	} else {
+		err = m.Client.UpdateAppendObject(object, tx)
 	}
-	return m.Client.UpdateAppendObject(object)
+	if err != nil {
+		return err
+	}
+	err = m.Client.UpdateUsage(object.BucketName, object.Size, tx)
+	if err != nil {
+		return err
+	}
+	return m.Client.CommitTrans(tx)
 }
 
 //func (m *Meta) DeleteObjectEntry(object *Object) error {

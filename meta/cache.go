@@ -1,15 +1,17 @@
 package meta
 
 import (
+	"context"
+	"database/sql"
+
 	"github.com/journeymidnight/yig/helper"
 	"github.com/journeymidnight/yig/redis"
-	"database/sql"
 )
 
 type CacheType int
 
 const (
-	NoCache     CacheType = iota
+	NoCache CacheType = iota
 	EnableCache
 	SimpleCache
 )
@@ -17,7 +19,7 @@ const (
 var cacheNames = [...]string{"NOCACHE", "EnableCache", "SimpleCache"}
 
 type MetaCache interface {
-	Get(table redis.RedisDatabase, key string,
+	Get(ctx context.Context, table redis.RedisDatabase, key string,
 		onCacheMiss func() (interface{}, error),
 		unmarshaller func([]byte) (interface{}, error), willNeed bool) (value interface{}, err error)
 	Remove(table redis.RedisDatabase, key string)
@@ -44,7 +46,7 @@ func newMetaCache(myType CacheType) (m MetaCache) {
 	return &disabledMetaCache{}
 }
 
-func (m *disabledMetaCache) Get(table redis.RedisDatabase, key string,
+func (m *disabledMetaCache) Get(ctx context.Context, table redis.RedisDatabase, key string,
 	onCacheMiss func() (interface{}, error),
 	unmarshaller func([]byte) (interface{}, error), willNeed bool) (value interface{}, err error) {
 
@@ -64,15 +66,16 @@ type enabledSimpleMetaCache struct {
 	Miss int64
 }
 
-func (m *enabledSimpleMetaCache) Get(table redis.RedisDatabase, key string,
+func (m *enabledSimpleMetaCache) Get(ctx context.Context, table redis.RedisDatabase, key string,
 	onCacheMiss func() (interface{}, error),
 	unmarshaller func([]byte) (interface{}, error), willNeed bool) (value interface{}, err error) {
 
-	helper.Logger.Println(10, "enabledSimpleMetaCache Get. table:", table, "key:", key)
+	requestId := helper.RequestIdFromContext(ctx)
+	helper.Logger.Println(10, "[", requestId, "]", "enabledSimpleMetaCache Get. table:", table, "key:", key)
 
 	value, err = redis.Get(table, key, unmarshaller)
 	if err != nil {
-		helper.Logger.Println(5, "enabledSimpleMetaCache Get err:", err, "table:", table, "key:", key)
+		helper.Logger.Println(5, "[", requestId, "]", "enabledSimpleMetaCache Get err:", err, "table:", table, "key:", key)
 	}
 	if err == nil && value != nil {
 		m.Hit = m.Hit + 1
@@ -82,8 +85,8 @@ func (m *enabledSimpleMetaCache) Get(table redis.RedisDatabase, key string,
 	//if redis doesn't have the entry
 	if onCacheMiss != nil {
 		value, err = onCacheMiss()
-		if err != nil{
-			if  err != sql.ErrNoRows {
+		if err != nil {
+			if err != sql.ErrNoRows {
 				helper.ErrorIf(err, "exec onCacheMiss() err.")
 			}
 			return
@@ -92,7 +95,7 @@ func (m *enabledSimpleMetaCache) Get(table redis.RedisDatabase, key string,
 		if willNeed == true {
 			err = redis.Set(table, key, value)
 			if err != nil {
-				helper.Logger.Println(5, "WARNING: redis is down!")
+				helper.Logger.Println(5, "[", requestId, "]", "WARNING: redis is down!")
 				//do nothing, even if redis is down.
 			}
 		}

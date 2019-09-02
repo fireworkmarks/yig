@@ -56,7 +56,7 @@ func (api ObjectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		}
 	}
 
-	if _, err = api.ObjectAPI.GetBucketInfo(bucketName, credential); err != nil {
+	if _, err = api.ObjectAPI.GetBucketInfo(r.Context(), bucketName, credential); err != nil {
 		helper.ErrorIf(err, "Unable to fetch bucket info.")
 		WriteErrorResponse(w, r, err)
 		return
@@ -66,6 +66,8 @@ func (api ObjectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	encodedSuccessResponse := EncodeResponse(LocationResponse{
 		Location: helper.CONFIG.Region,
 	})
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "GetBucketLocation"
 	WriteSuccessResponse(w, encodedSuccessResponse)
 }
 
@@ -104,13 +106,15 @@ func (api ObjectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		return
 	}
 
-	listMultipartsResponse, err := api.ObjectAPI.ListMultipartUploads(credential, bucketName, request)
+	listMultipartsResponse, err := api.ObjectAPI.ListMultipartUploads(r.Context(), credential, bucketName, request)
 	if err != nil {
 		helper.ErrorIf(err, "Unable to list multipart uploads.")
 		WriteErrorResponse(w, r, err)
 		return
 	}
 	encodedSuccessResponse := EncodeResponse(listMultipartsResponse)
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "ListMultipartUploads"
 	// write success response.
 	WriteSuccessResponse(w, encodedSuccessResponse)
 }
@@ -142,13 +146,13 @@ func (api ObjectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	request, err := parseListObjectsQuery(r.URL.Query())
+	request, err := parseListObjectsQuery(r.Context(), r.URL.Query())
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
 
-	listObjectsInfo, err := api.ObjectAPI.ListObjects(credential, bucketName, request)
+	listObjectsInfo, err := api.ObjectAPI.ListObjects(r.Context(), credential, bucketName, request)
 	if err != nil {
 		helper.ErrorIf(err, "Unable to list objects.")
 		WriteErrorResponse(w, r, err)
@@ -158,6 +162,8 @@ func (api ObjectAPIHandlers) ListObjectsHandler(w http.ResponseWriter, r *http.R
 	response := GenerateListObjectsResponse(bucketName, request, listObjectsInfo)
 	encodedSuccessResponse := EncodeResponse(response)
 
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "ListObjects"
 	// Write success response.
 	WriteSuccessResponse(w, encodedSuccessResponse)
 	return
@@ -184,14 +190,14 @@ func (api ObjectAPIHandlers) ListVersionedObjectsHandler(w http.ResponseWriter, 
 		}
 	}
 
-	request, err := parseListObjectsQuery(r.URL.Query())
+	request, err := parseListObjectsQuery(r.Context(), r.URL.Query())
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
 	request.Versioned = true
 
-	listObjectsInfo, err := api.ObjectAPI.ListVersionedObjects(credential, bucketName, request)
+	listObjectsInfo, err := api.ObjectAPI.ListVersionedObjects(r.Context(), credential, bucketName, request)
 	if err != nil {
 		helper.ErrorIf(err, "Unable to list objects.")
 		WriteErrorResponse(w, r, err)
@@ -201,6 +207,8 @@ func (api ObjectAPIHandlers) ListVersionedObjectsHandler(w http.ResponseWriter, 
 	response := GenerateVersionedListObjectResponse(bucketName, request, listObjectsInfo)
 	encodedSuccessResponse := EncodeResponse(response)
 
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "ListVersionedObjects"
 	// Write success response.
 	WriteSuccessResponse(w, encodedSuccessResponse)
 	return
@@ -219,7 +227,7 @@ func (api ObjectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	bucketsInfo, err := api.ObjectAPI.ListBuckets(credential)
+	bucketsInfo, err := api.ObjectAPI.ListBuckets(r.Context(), credential)
 	if err == nil {
 		// generate response
 		response := GenerateListBucketsResponse(bucketsInfo, credential)
@@ -229,6 +237,8 @@ func (api ObjectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	helper.ErrorIf(err, "Unable to list buckets.")
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "ListBuckets"
 	WriteErrorResponse(w, r, err)
 }
 
@@ -293,7 +303,7 @@ func (api ObjectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	var deletedObjects []ObjectIdentifier
 	// Loop through all the objects and delete them sequentially.
 	for _, object := range deleteObjects.Objects {
-		result, err := api.ObjectAPI.DeleteObject(bucket, object.ObjectName,
+		result, err := api.ObjectAPI.DeleteObject(r.Context(), bucket, object.ObjectName,
 			object.VersionId, credential)
 		if err == nil {
 			deletedObjects = append(deletedObjects, ObjectIdentifier{
@@ -326,6 +336,8 @@ func (api ObjectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Generate response
 	response := GenerateMultiDeleteResponse(deleteObjects.Quiet, deletedObjects, deleteErrors)
 	encodedSuccessResponse := EncodeResponse(response)
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "DeleteMultipleObjects"
 	// Write success response.
 	WriteSuccessResponse(w, encodedSuccessResponse)
 }
@@ -334,7 +346,7 @@ func (api ObjectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 // ----------
 // This implementation of the PUT operation creates a new bucket for authenticated request
 func (api ObjectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
-	helper.Debugln("PutBucketHandler", "enter")
+	helper.Debugln("[", RequestIdFromContext(r.Context()), "]", "PutBucketHandler", "enter")
 	vars := mux.Vars(r)
 	bucketName := strings.ToLower(vars["bucket"])
 	if !isValidBucketName(bucketName) {
@@ -349,7 +361,7 @@ func (api ObjectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if len(r.Header.Get("Content-Length")) == 0 {
-		helper.Debugln("Content Length is null!")
+		helper.Debugln("[", RequestIdFromContext(r.Context()), "]", "Content Length is null!")
 		WriteErrorResponse(w, r, ErrInvalidHeader)
 		return
 	}
@@ -371,7 +383,7 @@ func (api ObjectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	//	}
 
 	// Make bucket.
-	err = api.ObjectAPI.MakeBucket(bucketName, acl, credential)
+	err = api.ObjectAPI.MakeBucket(r.Context(), bucketName, acl, credential)
 	if err != nil {
 		helper.ErrorIf(err, "Unable to create bucket "+bucketName)
 		WriteErrorResponse(w, r, err)
@@ -379,13 +391,15 @@ func (api ObjectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 	// Make sure to add Location information here only for bucket
 	w.Header().Set("Location", GetLocation(r))
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "PutBucket"
 	WriteSuccessResponse(w, nil)
 }
 
 func (api ObjectAPIHandlers) PutBucketLifeCycleHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	helper.Logger.Println(10, "enter PutBucketLCHandler")
+	helper.Logger.Println(10, "[", RequestIdFromContext(r.Context()), "]", "enter PutBucketLCHandler")
 	var credential common.Credential
 	var err error
 	if credential, err = signature.IsReqAuthenticated(r); err != nil {
@@ -407,13 +421,15 @@ func (api ObjectAPIHandlers) PutBucketLifeCycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	helper.Debugln("Set LC:", lc)
-	err = api.ObjectAPI.SetBucketLc(bucket, lc, credential)
+	helper.Debugln("[", RequestIdFromContext(r.Context()), "]", "Set LC:", lc)
+	err = api.ObjectAPI.SetBucketLc(r.Context(), bucket, lc, credential)
 	if err != nil {
 		helper.ErrorIf(err, "Unable to set LC for bucket.")
 		WriteErrorResponse(w, r, err)
 		return
 	}
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "PutBucketLifeCycle"
 	WriteSuccessResponse(w, nil)
 }
 
@@ -438,7 +454,7 @@ func (api ObjectAPIHandlers) GetBucketLifeCycleHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	lc, err := api.ObjectAPI.GetBucketLc(bucketName, credential)
+	lc, err := api.ObjectAPI.GetBucketLc(r.Context(), bucketName, credential)
 	if err != nil {
 		helper.ErrorIf(err, "Failed to get bucket acl policy for bucket", bucketName)
 		WriteErrorResponse(w, r, err)
@@ -453,6 +469,8 @@ func (api ObjectAPIHandlers) GetBucketLifeCycleHandler(w http.ResponseWriter, r 
 	}
 
 	setXmlHeader(w, lcBuffer)
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "GetBucketLifeCycle"
 	WriteSuccessResponse(w, lcBuffer)
 
 }
@@ -468,11 +486,13 @@ func (api ObjectAPIHandlers) DelBucketLifeCycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	err = api.ObjectAPI.DelBucketLc(bucketName, credential)
+	err = api.ObjectAPI.DelBucketLc(r.Context(), bucketName, credential)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "DelBucketLifeCycle"
 	WriteSuccessNoContent(w)
 
 }
@@ -512,12 +532,14 @@ func (api ObjectAPIHandlers) PutBucketAclHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	err = api.ObjectAPI.SetBucketAcl(bucket, policy, acl, credential)
+	err = api.ObjectAPI.SetBucketAcl(r.Context(), bucket, policy, acl, credential)
 	if err != nil {
 		helper.ErrorIf(err, "Unable to set ACL for bucket.")
 		WriteErrorResponse(w, r, err)
 		return
 	}
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "PutBucketAcl"
 	WriteSuccessResponse(w, nil)
 }
 
@@ -542,7 +564,7 @@ func (api ObjectAPIHandlers) GetBucketAclHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	policy, err := api.ObjectAPI.GetBucketAcl(bucketName, credential)
+	policy, err := api.ObjectAPI.GetBucketAcl(r.Context(), bucketName, credential)
 	if err != nil {
 		helper.ErrorIf(err, "Failed to get bucket acl policy for bucket", bucketName)
 		WriteErrorResponse(w, r, err)
@@ -557,6 +579,8 @@ func (api ObjectAPIHandlers) GetBucketAclHandler(w http.ResponseWriter, r *http.
 	}
 
 	setXmlHeader(w, aclBuffer)
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "GetBucketAcl"
 	WriteSuccessResponse(w, aclBuffer)
 }
 
@@ -591,16 +615,18 @@ func (api ObjectAPIHandlers) PutBucketCorsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	cors, err := CorsFromXml(corsBuffer)
+	cors, err := CorsFromXml(r.Context(), corsBuffer)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
-	err = api.ObjectAPI.SetBucketCors(bucketName, cors, credential)
+	err = api.ObjectAPI.SetBucketCors(r.Context(), bucketName, cors, credential)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "PutBucketCors"
 	WriteSuccessResponse(w, nil)
 }
 
@@ -615,11 +641,13 @@ func (api ObjectAPIHandlers) DeleteBucketCorsHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	err = api.ObjectAPI.DeleteBucketCors(bucketName, credential)
+	err = api.ObjectAPI.DeleteBucketCors(r.Context(), bucketName, credential)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "DeleteBucketCors"
 	WriteSuccessNoContent(w)
 }
 
@@ -634,7 +662,7 @@ func (api ObjectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	cors, err := api.ObjectAPI.GetBucketCors(bucketName, credential)
+	cors, err := api.ObjectAPI.GetBucketCors(r.Context(), bucketName, credential)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
@@ -648,6 +676,8 @@ func (api ObjectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http
 	}
 
 	setXmlHeader(w, corsBuffer)
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "GetBucketCors"
 	WriteSuccessResponse(w, corsBuffer)
 }
 
@@ -662,7 +692,7 @@ func (api ObjectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r
 		return
 	}
 
-	versioning, err := api.ObjectAPI.GetBucketVersioning(bucketName, credential)
+	versioning, err := api.ObjectAPI.GetBucketVersioning(r.Context(), bucketName, credential)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
@@ -676,6 +706,8 @@ func (api ObjectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r
 	}
 
 	setXmlHeader(w, versioningBuffer)
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "GetBucketVersioning"
 	WriteSuccessResponse(w, versioningBuffer)
 }
 
@@ -716,11 +748,13 @@ func (api ObjectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		WriteErrorResponse(w, r, err)
 		return
 	}
-	err = api.ObjectAPI.SetBucketVersioning(bucketName, versioning, credential)
+	err = api.ObjectAPI.SetBucketVersioning(r.Context(), bucketName, versioning, credential)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "PutBucketVersioning"
 	WriteSuccessResponse(w, nil)
 }
 
@@ -798,11 +832,13 @@ func (api ObjectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	if _, err = api.ObjectAPI.GetBucketInfo(bucket, credential); err != nil {
+	if _, err = api.ObjectAPI.GetBucketInfo(r.Context(), bucket, credential); err != nil {
 		helper.ErrorIf(err, "Unable to fetch bucket info.")
 		WriteErrorResponse(w, r, err)
 		return
 	}
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "HeadBucket"
 	WriteSuccessResponse(w, nil)
 }
 
@@ -818,12 +854,14 @@ func (api ObjectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err = api.ObjectAPI.DeleteBucket(bucket, credential); err != nil {
+	if err = api.ObjectAPI.DeleteBucket(r.Context(), bucket, credential); err != nil {
 		helper.ErrorIf(err, "Unable to delete a bucket.")
 		WriteErrorResponse(w, r, err)
 		return
 	}
 
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "DeleteBucket"
 	// Write success response.
 	WriteSuccessNoContent(w)
 }

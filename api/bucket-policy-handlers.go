@@ -42,7 +42,7 @@ const (
 // PutBucketPolicyHandler - This HTTP handler stores given bucket policy configuration as per
 // https://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 func (api ObjectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	helper.Debugln("PutBucketPolicyHandler", "enter")
+	helper.Debugln("[", RequestIdFromContext(r.Context()), "]", "PutBucketPolicyHandler", "enter")
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -88,11 +88,13 @@ func (api ObjectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err = api.ObjectAPI.SetBucketPolicy(credential, bucket, *bucketPolicy); err != nil {
+	if err = api.ObjectAPI.SetBucketPolicy(r.Context(), credential, bucket, *bucketPolicy); err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
 
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "PutBucketPolicy"
 	// Success.
 	WriteSuccessResponse(w, nil)
 }
@@ -118,18 +120,20 @@ func (api ObjectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	if err := api.ObjectAPI.DeleteBucketPolicy(credential, bucket); err != nil {
+	if err := api.ObjectAPI.DeleteBucketPolicy(r.Context(), credential, bucket); err != nil {
 		WriteErrorResponse(w, r, err)
 		return
 	}
 
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "DeleteBucketPolicy"
 	// Success.
 	WriteSuccessResponse(w, nil)
 }
 
 // GetBucketPolicyHandler - This HTTP handler returns bucket policy configuration.
 func (api ObjectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	helper.Debugln("GetBucketPolicyHandler", "enter")
+	helper.Debugln("[", RequestIdFromContext(r.Context()), "]", "GetBucketPolicyHandler", "enter")
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	var credential common.Credential
@@ -150,7 +154,7 @@ func (api ObjectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Read bucket access policy.
-	bucketPolicy, err := api.ObjectAPI.GetBucketPolicy(credential, bucket)
+	bucketPolicy, err := api.ObjectAPI.GetBucketPolicy(r.Context(), credential, bucket)
 	if err != nil {
 		WriteErrorResponse(w, r, err)
 		return
@@ -162,6 +166,8 @@ func (api ObjectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
+	//ResponseRecorder
+	w.(*ResponseRecorder).operationName = "GetBucketPolicy"
 	// Write to client.
 	WriteSuccessResponse(w, policyData)
 }
