@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -16,6 +17,8 @@ import (
 	"github.com/journeymidnight/yig/mods"
 	"github.com/journeymidnight/yig/redis"
 	"github.com/journeymidnight/yig/storage"
+
+	_ "net/http/pprof"
 )
 
 func DumpStacks() {
@@ -71,10 +74,11 @@ func main() {
 			helper.Logger.Error("Failed to create message bus sender, sender is nil.")
 			panic("failed to create message bus sender, sender is nil.")
 		}
-		helper.Logger.Info( "Succeed to create message bus sender.")
+		helper.Logger.Info("Succeed to create message bus sender.")
 	}
 
 	// Read all *.so from plugins directory, and fill the variable allPlugins
+
 	allPluginMap := mods.InitialPlugins()
 
 	iam.InitializeIamClient(allPluginMap)
@@ -89,6 +93,11 @@ func main() {
 		ObjectLayer:  yig,
 	}
 	startApiServer(apiServerConfig)
+
+	// Add pprof handler
+	go func() {
+		http.ListenAndServe("0.0.0.0:8730", nil)
+	}()
 
 	// ignore signal handlers set by Iris
 	signal.Ignore()

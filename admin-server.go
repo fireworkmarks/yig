@@ -189,7 +189,6 @@ func startAdminServer(c *adminServerConfig) {
 
 	hosts, port := getListenIPs(adminServer) // get listen ips and port.
 
-	helper.Logger.Info("S3 Object Storage:")
 	// Print api listen ips.
 	printListenIPs(false, hosts, port)
 

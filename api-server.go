@@ -35,8 +35,8 @@ import (
 
 type ServerConfig struct {
 	Address      string
-	KeyFilePath  string      // path for SSL key file
-	CertFilePath string      // path for SSL certificate file
+	KeyFilePath  string     // path for SSL key file
+	CertFilePath string     // path for SSL certificate file
 	Logger       log.Logger // global logger
 	ObjectLayer  *storage.YigStorage
 }
@@ -200,7 +200,7 @@ func checkPortAvailability(port int) {
 					// Fail if port is already in use.
 					helper.PanicOnError(err,
 						fmt.Sprintf("Unable to listen on %s:%.d.",
-						tcpAddr.IP, tcpAddr.Port))
+							tcpAddr.IP, tcpAddr.Port))
 				} else {
 					// Ignore other errors.
 					continue
@@ -209,7 +209,7 @@ func checkPortAvailability(port int) {
 			err = l.Close()
 			helper.PanicOnError(err,
 				fmt.Sprintf("Unable to close listener on %s:%.d.",
-				tcpAddr.IP, tcpAddr.Port))
+					tcpAddr.IP, tcpAddr.Port))
 		}
 	}
 }
@@ -246,7 +246,6 @@ func startApiServer(c *ServerConfig) {
 	hosts, port := getListenIPs(apiServer.Server) // get listen ips and port.
 	tls := apiServer.Server.TLSConfig != nil      // 'true' if TLS is enabled.
 
-	helper.Logger.Info("S3 Object Storage:")
 	// Print api listen ips.
 	printListenIPs(tls, hosts, port)
 
