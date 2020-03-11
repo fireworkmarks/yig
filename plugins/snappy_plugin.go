@@ -2,9 +2,11 @@ package main
 
 import (
 	"github.com/golang/snappy"
+	"github.com/journeymidnight/yig/helper"
 	. "github.com/journeymidnight/yig/mods"
 	"io"
 	"strings"
+	"sync"
 )
 
 const pluginName = "snappy"
@@ -17,6 +19,8 @@ var Exported = YigPlugin{
 	Create:     GetCompressClient,
 }
 
+var downloadBufPool sync.Pool
+
 func GetCompressClient(config map[string]interface{}) (interface{}, error) {
 	snappy := SnappyCompress{}
 	return snappy, nil
@@ -25,11 +29,41 @@ func GetCompressClient(config map[string]interface{}) (interface{}, error) {
 type SnappyCompress struct{}
 
 func (s SnappyCompress) CompressReader(reader io.Reader) io.Reader {
-	return snappy.NewReader(reader)
+	pipeReader, pipeWriter := io.Pipe()
+	go func() {
+		defer pipeWriter.Close()
+		downloadBufPool.New = func() interface{} {
+			return make([]byte, helper.CONFIG.DownloadBufPoolSize)
+		}
+		buffer := downloadBufPool.Get().([]byte)
+		_, err := io.CopyBuffer(snappy.NewBufferedWriter(pipeWriter), reader, buffer)
+		downloadBufPool.Put(buffer)
+		if err != nil {
+			helper.Logger.Error("Unable to read an object need compress:", err)
+			pipeWriter.CloseWithError(err)
+			return
+		}
+	}()
+	return pipeReader
 }
 
 func (s SnappyCompress) CompressWriter(writer io.Writer) io.Writer {
-	return snappy.NewBufferedWriter(writer)
+	pipeReader, pipeWriter := io.Pipe()
+	go func() {
+		defer pipeReader.Close()
+		downloadBufPool.New = func() interface{} {
+			return make([]byte, helper.CONFIG.DownloadBufPoolSize)
+		}
+		buffer := downloadBufPool.Get().([]byte)
+		_, err := io.CopyBuffer(writer, pipeReader, buffer)
+		downloadBufPool.Put(buffer)
+		if err != nil {
+			helper.Logger.Error("Unable to read an object need compress:", err)
+			pipeWriter.CloseWithError(err)
+			return
+		}
+	}()
+	return pipeWriter
 }
 
 func (s SnappyCompress) IsCompressible(objectName, mtype string) bool {
