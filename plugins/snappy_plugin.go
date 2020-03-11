@@ -25,32 +25,11 @@ func GetCompressClient(config map[string]interface{}) (interface{}, error) {
 type SnappyCompress struct{}
 
 func (s SnappyCompress) CompressReader(reader io.Reader) io.Reader {
-	return CompressReader{r: reader}
+	return snappy.NewReader(reader)
 }
 
-type CompressReader struct {
-	r io.Reader
-}
-
-func (c CompressReader) Read(p []byte) (n int, err error) {
-	out := snappy.Encode(nil, p)
-	return c.r.Read(out)
-}
-
-func (s SnappyCompress) UnCompressReader(reader io.Reader) io.Reader {
-	return UnCompressReader{r: reader}
-}
-
-type UnCompressReader struct {
-	r io.Reader
-}
-
-func (c UnCompressReader) Read(p []byte) (n int, err error) {
-	out, err := snappy.Decode(nil, p)
-	if err != nil {
-		return
-	}
-	return c.r.Read(out)
+func (s SnappyCompress) CompressWriter(writer io.Writer) io.Writer {
+	return snappy.NewBufferedWriter(writer)
 }
 
 func (s SnappyCompress) IsCompressible(objectName, mtype string) bool {
