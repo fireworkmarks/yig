@@ -2,7 +2,7 @@ package api
 
 import (
 	"fmt"
-	."github.com/journeymidnight/yig/context"
+	. "github.com/journeymidnight/yig/context"
 	"net/http"
 	"strings"
 	"time"
@@ -65,7 +65,7 @@ func (a AccessLogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		objectLastModifiedTime := ctx.ObjectInfo.LastModifiedTime.Format(timeLayoutStr)
 		elems["last_modified_time"] = objectLastModifiedTime
 	}
-	a.notify(elems)
+	go a.notify(elems)
 }
 
 func (a AccessLogHandler) notify(elems map[string]string) {

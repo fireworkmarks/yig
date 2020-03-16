@@ -11,36 +11,37 @@ import (
 )
 
 func (m *Meta) GetObject(bucketName string, objectName string, willNeed bool) (object *Object, err error) {
-	getObject := func() (o interface{}, err error) {
-		helper.Logger.Info("GetObject CacheMiss. bucket:", bucketName,
-			"object:", objectName)
-		object, err := m.Client.GetObject(bucketName, objectName, "")
-		if err != nil {
-			return
-		}
-		helper.Logger.Info("GetObject object.Name:", object.Name)
-		if object.Name != objectName {
-			err = ErrNoSuchKey
-			return
-		}
-		return object, nil
-	}
-	unmarshaller := func(in []byte) (interface{}, error) {
-		var object Object
-		err := helper.MsgPackUnMarshal(in, &object)
-		return &object, err
-	}
-
-	o, err := m.Cache.Get(redis.ObjectTable, bucketName+":"+objectName+":",
-		getObject, unmarshaller, willNeed)
-	if err != nil {
-		return
-	}
-	object, ok := o.(*Object)
-	if !ok {
-		err = ErrInternalError
-		return
-	}
+	//getObject := func() (o interface{}, err error) {
+	//	helper.Logger.Info("GetObject CacheMiss. bucket:", bucketName,
+	//		"object:", objectName)
+	//	object, err := m.Client.GetObject(bucketName, objectName, "")
+	//	if err != nil {
+	//		return
+	//	}
+	//	helper.Logger.Info("GetObject object.Name:", object.Name)
+	//	if object.Name != objectName {
+	//		err = ErrNoSuchKey
+	//		return
+	//	}
+	//	return object, nil
+	//}
+	//unmarshaller := func(in []byte) (interface{}, error) {
+	//	var object Object
+	//	err := helper.MsgPackUnMarshal(in, &object)
+	//	return &object, err
+	//}
+	//
+	//o, err := m.Cache.Get(redis.ObjectTable, bucketName+":"+objectName+":",
+	//	getObject, unmarshaller, willNeed)
+	//if err != nil {
+	//	return
+	//}
+	//object, ok := o.(*Object)
+	//if !ok {
+	//	err = ErrInternalError
+	//	return
+	//}
+	object = new(Object)
 	return object, nil
 }
 
@@ -78,26 +79,30 @@ func (m *Meta) PutObject(reqCtx RequestContext, object *Object, multipart *Multi
 	if reqCtx.BucketInfo == nil {
 		return ErrNoSuchBucket
 	}
-	if reqCtx.BucketInfo.Versioning == VersionDisabled {
-		object.VersionId = NullVersion
-	} else {
-		return ErrNotImplemented
-		// TODO: object.VersionId = strconv.FormatUint(math.MaxUint64-uint64(object.LastModifiedTime.UnixNano()), 10)
-	}
+	//if reqCtx.BucketInfo.Versioning == VersionDisabled {
+	//	object.VersionId = NullVersion
+	//} else {
+	//	return ErrNotImplemented
+	//	// TODO: object.VersionId = strconv.FormatUint(math.MaxUint64-uint64(object.LastModifiedTime.UnixNano()), 10)
+	//}
 
 	needUpdate := (reqCtx.ObjectInfo != nil)
 	if multipart == nil && object.Parts == nil {
 		if needUpdate {
-			return m.Client.UpdateObjectWithoutMultiPart(object)
+			return nil
+			//return m.Client.UpdateObjectWithoutMultiPart(object)
 		} else {
-			return m.Client.PutObjectWithoutMultiPart(object)
+			return nil
+			//return m.Client.PutObjectWithoutMultiPart(object)
 		}
 	}
 
 	if needUpdate {
-		return m.Client.UpdateObject(object, multipart, updateUsage)
+		return nil
+		//return m.Client.UpdateObject(object, multipart, updateUsage)
 	} else {
-		return m.Client.PutObject(object, multipart, updateUsage)
+		return nil
+		//return m.Client.PutObject(object, multipart, updateUsage)
 	}
 
 	return nil

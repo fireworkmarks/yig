@@ -214,132 +214,135 @@ func (rd *RadosSmallDownloader) Close() error {
 func (cluster *CephCluster) Put(poolname string, data io.Reader) (oid string,
 	size uint64, err error) {
 
-	oid = cluster.getUniqUploadName()
-	if poolname == backend.SMALL_FILE_POOLNAME {
-		size, err = cluster.doSmallPut(poolname, oid, data)
-		return oid, size, err
-	}
-
-	pool, err := cluster.Conn.OpenPool(poolname)
-	if err != nil {
-		return oid, 0, fmt.Errorf("Bad poolname %s", poolname)
-	}
-	defer pool.Destroy()
-
-	striper, err := pool.CreateStriper()
-	if err != nil {
-		return oid, 0, fmt.Errorf("Bad ioctx of pool %s", poolname)
-	}
-	defer striper.Destroy()
-
-	setStripeLayout(striper)
-
-	/* if the data len in pending_data is bigger than current_upload_window, I will flush the data to ceph */
-	/* current_upload_window could not dynamically increase or shrink */
-
-	var c AioCompletion
-	pending := list.New()
-	var current_upload_window = helper.CONFIG.UploadMinChunkSize /* initial window size as MIN_CHUNK_SIZE, max size is MAX_CHUNK_SIZE */
-	var pending_data = make([]byte, current_upload_window)
-
-	var slice_offset = 0
-	var slow_count = 0
-	// slice is the buffer size of reader, the size is equal to remain size of pending_data
-	var slice = pending_data[0:current_upload_window]
-
-	var offset uint64 = 0
-
-	for {
-		start := time.Now()
-		count, err := data.Read(slice)
-		if err != nil && err != io.EOF {
-			drain_pending(pending)
-			return oid, 0,
-				fmt.Errorf("Read from client failed. pool:%s oid:%s", poolname, oid)
-		}
-		if count == 0 {
-			break
-		}
-		// it's used to calculate next upload window
-		elapsed_time := time.Since(start)
-
-		slice_offset += count
-		slice = pending_data[slice_offset:]
-
-		//is pending_data full?
-		if slice_offset < len(pending_data) {
-			continue
-		}
-
-		/* pending data is full now */
-		c, err = striper.WriteAIO(oid, pending_data, offset)
-		if err != nil {
-			c.Release()
-			drain_pending(pending)
-			return oid, 0,
-				fmt.Errorf("Bad io. pool:%s oid:%s", poolname, oid)
-		}
-		pending.PushBack(c)
-
-		for pending_has_completed(pending) {
-			if ret := wait_pending_front(pending); ret < 0 {
-				drain_pending(pending)
-				return oid, 0,
-					fmt.Errorf("Error drain_pending in pending_has_completed. pool:%s oid:%s", poolname, oid)
-			}
-		}
-
-		if pending.Len() > AIO_CONCURRENT {
-			if ret := wait_pending_front(pending); ret < 0 {
-				drain_pending(pending)
-				return oid, 0,
-					fmt.Errorf("Error wait_pending_front. pool:%s oid:%s", poolname, oid)
-			}
-		}
-		offset += uint64(len(pending_data))
-
-		/* Resize current upload window */
-		expected_time := int64(count) * 1000 * 1000 * 1000 / current_upload_window /* 1000 * 1000 * 1000 means use Nanoseconds */
-
-		// If the upload speed is less than half of the current upload window, reduce the upload window by half.
-		// If upload speed is larger than current window size per second, used the larger window and twice
-		if elapsed_time.Nanoseconds() > 2*int64(expected_time) {
-			if slow_count > 2 && current_upload_window > helper.CONFIG.UploadMinChunkSize {
-				current_upload_window = current_upload_window >> 1
-				slow_count = 0
-			}
-			slow_count += 1
-		} else if int64(expected_time) > elapsed_time.Nanoseconds() {
-			/* if upload speed is fast enough, enlarge the current_upload_window a bit */
-			current_upload_window = current_upload_window << 1
-			if current_upload_window > helper.CONFIG.UploadMaxChunkSize {
-				current_upload_window = helper.CONFIG.UploadMaxChunkSize
-			}
-			slow_count = 0
-		}
-		/* allocate a new pending data */
-		pending_data = make([]byte, current_upload_window)
-		slice_offset = 0
-		slice = pending_data[0:current_upload_window]
-	}
-
-	size = uint64(slice_offset) + offset
-	//write all remaining data
-	if slice_offset > 0 {
-		c, err = striper.WriteAIO(oid, pending_data[:slice_offset], offset)
-		if err != nil {
-			c.Release()
-			return oid, 0, fmt.Errorf("error writing remaining data, pool:%s oid:%s",
-				poolname, oid)
-		}
-		pending.PushBack(c)
-	}
-
-	//drain_pending
-	if ret := drain_pending(pending); ret < 0 {
-		return oid, 0,
-			fmt.Errorf("Error wait_pending_front. pool:%s oid:%s", poolname, oid)
-	}
+	buf, err := ioutil.ReadAll(data)
+	size = uint64(len(buf))
+	oid = "1111111:4"
+	//oid = cluster.getUniqUploadName()
+	//if poolname == backend.SMALL_FILE_POOLNAME {
+	//	size, err = cluster.doSmallPut(poolname, oid, data)
+	//	return oid, size, err
+	//}
+	//
+	//pool, err := cluster.Conn.OpenPool(poolname)
+	//if err != nil {
+	//	return oid, 0, fmt.Errorf("Bad poolname %s", poolname)
+	//}
+	//defer pool.Destroy()
+	//
+	//striper, err := pool.CreateStriper()
+	//if err != nil {
+	//	return oid, 0, fmt.Errorf("Bad ioctx of pool %s", poolname)
+	//}
+	//defer striper.Destroy()
+	//
+	//setStripeLayout(striper)
+	//
+	///* if the data len in pending_data is bigger than current_upload_window, I will flush the data to ceph */
+	///* current_upload_window could not dynamically increase or shrink */
+	//
+	//var c AioCompletion
+	//pending := list.New()
+	//var current_upload_window = helper.CONFIG.UploadMinChunkSize /* initial window size as MIN_CHUNK_SIZE, max size is MAX_CHUNK_SIZE */
+	//var pending_data = make([]byte, current_upload_window)
+	//
+	//var slice_offset = 0
+	//var slow_count = 0
+	//// slice is the buffer size of reader, the size is equal to remain size of pending_data
+	//var slice = pending_data[0:current_upload_window]
+	//
+	//var offset uint64 = 0
+	//
+	//for {
+	//	start := time.Now()
+	//	count, err := data.Read(slice)
+	//	if err != nil && err != io.EOF {
+	//		drain_pending(pending)
+	//		return oid, 0,
+	//			fmt.Errorf("Read from client failed. pool:%s oid:%s", poolname, oid)
+	//	}
+	//	if count == 0 {
+	//		break
+	//	}
+	//	// it's used to calculate next upload window
+	//	elapsed_time := time.Since(start)
+	//
+	//	slice_offset += count
+	//	slice = pending_data[slice_offset:]
+	//
+	//	//is pending_data full?
+	//	if slice_offset < len(pending_data) {
+	//		continue
+	//	}
+	//
+	//	/* pending data is full now */
+	//	c, err = striper.WriteAIO(oid, pending_data, offset)
+	//	if err != nil {
+	//		c.Release()
+	//		drain_pending(pending)
+	//		return oid, 0,
+	//			fmt.Errorf("Bad io. pool:%s oid:%s", poolname, oid)
+	//	}
+	//	pending.PushBack(c)
+	//
+	//	for pending_has_completed(pending) {
+	//		if ret := wait_pending_front(pending); ret < 0 {
+	//			drain_pending(pending)
+	//			return oid, 0,
+	//				fmt.Errorf("Error drain_pending in pending_has_completed. pool:%s oid:%s", poolname, oid)
+	//		}
+	//	}
+	//
+	//	if pending.Len() > AIO_CONCURRENT {
+	//		if ret := wait_pending_front(pending); ret < 0 {
+	//			drain_pending(pending)
+	//			return oid, 0,
+	//				fmt.Errorf("Error wait_pending_front. pool:%s oid:%s", poolname, oid)
+	//		}
+	//	}
+	//	offset += uint64(len(pending_data))
+	//
+	//	/* Resize current upload window */
+	//	expected_time := int64(count) * 1000 * 1000 * 1000 / current_upload_window /* 1000 * 1000 * 1000 means use Nanoseconds */
+	//
+	//	// If the upload speed is less than half of the current upload window, reduce the upload window by half.
+	//	// If upload speed is larger than current window size per second, used the larger window and twice
+	//	if elapsed_time.Nanoseconds() > 2*int64(expected_time) {
+	//		if slow_count > 2 && current_upload_window > helper.CONFIG.UploadMinChunkSize {
+	//			current_upload_window = current_upload_window >> 1
+	//			slow_count = 0
+	//		}
+	//		slow_count += 1
+	//	} else if int64(expected_time) > elapsed_time.Nanoseconds() {
+	//		/* if upload speed is fast enough, enlarge the current_upload_window a bit */
+	//		current_upload_window = current_upload_window << 1
+	//		if current_upload_window > helper.CONFIG.UploadMaxChunkSize {
+	//			current_upload_window = helper.CONFIG.UploadMaxChunkSize
+	//		}
+	//		slow_count = 0
+	//	}
+	//	/* allocate a new pending data */
+	//	pending_data = make([]byte, current_upload_window)
+	//	slice_offset = 0
+	//	slice = pending_data[0:current_upload_window]
+	//}
+	//
+	//size = uint64(slice_offset) + offset
+	////write all remaining data
+	//if slice_offset > 0 {
+	//	c, err = striper.WriteAIO(oid, pending_data[:slice_offset], offset)
+	//	if err != nil {
+	//		c.Release()
+	//		return oid, 0, fmt.Errorf("error writing remaining data, pool:%s oid:%s",
+	//			poolname, oid)
+	//	}
+	//	pending.PushBack(c)
+	//}
+	//
+	////drain_pending
+	//if ret := drain_pending(pending); ret < 0 {
+	//	return oid, 0,
+	//		fmt.Errorf("Error wait_pending_front. pool:%s oid:%s", poolname, oid)
+	//}
 	return oid, size, nil
 }
 
@@ -554,7 +557,7 @@ func (cluster *CephCluster) Remove(poolname string, oid string) error {
 		return errors.New("Bad ioctx")
 	}
 	defer striper.Destroy()
-	// if we do not set our custom layout, rados will infer all objects filename from default layout setting, 
+	// if we do not set our custom layout, rados will infer all objects filename from default layout setting,
 	// and some sub objects will not be deleted
 	setStripeLayout(striper)
 

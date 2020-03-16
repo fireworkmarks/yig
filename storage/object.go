@@ -517,25 +517,25 @@ func (yig *YigStorage) PutObject(reqCtx RequestContext, credential common.Creden
 	sseRequest datatype.SseRequest, storageClass meta.StorageClass) (result datatype.PutObjectResult, err error) {
 	bucketName, objectName := reqCtx.BucketName, reqCtx.ObjectName
 	defer data.Close()
-	encryptionKey, cipherKey, err := yig.encryptionKeyFromSseRequest(sseRequest, bucketName, objectName)
-	helper.Logger.Info("get encryptionKey:", encryptionKey, "cipherKey:", cipherKey, "err:", err)
-	if err != nil {
-		return
-	}
+	//encryptionKey, cipherKey, err := yig.encryptionKeyFromSseRequest(sseRequest, bucketName, objectName)
+	//helper.Logger.Info("get encryptionKey:", encryptionKey, "cipherKey:", cipherKey, "err:", err)
+	//if err != nil {
+	//	return
+	//}
 
 	bucket := reqCtx.BucketInfo
 	if bucket == nil {
 		return result, ErrNoSuchBucket
 	}
 
-	switch bucket.ACL.CannedAcl {
-	case "public-read-write":
-		break
-	default:
-		if bucket.OwnerId != credential.UserId {
-			return result, ErrBucketAccessForbidden
-		}
-	}
+	//switch bucket.ACL.CannedAcl {
+	//case "public-read-write":
+	//	break
+	//default:
+	//	if bucket.OwnerId != credential.UserId {
+	//		return result, ErrBucketAccessForbidden
+	//	}
+	//}
 
 	md5Writer := md5.New()
 
@@ -554,42 +554,42 @@ func (yig *YigStorage) PutObject(reqCtx RequestContext, credential common.Creden
 
 	dataReader := io.TeeReader(limitedDataReader, md5Writer)
 
-	var initializationVector []byte
-	if len(encryptionKey) != 0 {
-		initializationVector, err = newInitializationVector()
-		if err != nil {
-			return
-		}
-	}
-	// Not support now
-	storageReader, err := wrapEncryptionReader(dataReader, encryptionKey, initializationVector)
-	if err != nil {
-		return
-	}
-	objectId, bytesWritten, err := cluster.Put(poolName, storageReader)
+	//var initializationVector []byte
+	//if len(encryptionKey) != 0 {
+	//	initializationVector, err = newInitializationVector()
+	//	if err != nil {
+	//		return
+	//	}
+	//}
+	//// Not support now
+	//storageReader, err := wrapEncryptionReader(dataReader, encryptionKey, initializationVector)
+	//if err != nil {
+	//	return
+	//}
+	objectId, bytesWritten, err := cluster.Put(poolName, dataReader)
 	if err != nil {
 		return
 	}
 	// Should metadata update failed, add `maybeObjectToRecycle` to `RecycleQueue`,
 	// so the object in Ceph could be removed asynchronously
-	maybeObjectToRecycle := objectToRecycle{
-		location: cluster.ID(),
-		pool:     poolName,
-		objectId: objectId,
-	}
-	if int64(bytesWritten) < size {
-		RecycleQueue <- maybeObjectToRecycle
-		helper.Logger.Error("Failed to write objects, already written",
-			bytesWritten, "total size", size)
-		return result, ErrIncompleteBody
-	}
+	//maybeObjectToRecycle := objectToRecycle{
+	//	location: cluster.ID(),
+	//	pool:     poolName,
+	//	objectId: objectId,
+	//}
+	//if int64(bytesWritten) < size {
+	//	RecycleQueue <- maybeObjectToRecycle
+	//	helper.Logger.Error("Failed to write objects, already written",
+	//		bytesWritten, "total size", size)
+	//	return result, ErrIncompleteBody
+	//}
 
 	calculatedMd5 := hex.EncodeToString(md5Writer.Sum(nil))
 	helper.Logger.Info("CalculatedMd5:", calculatedMd5, "userMd5:", metadata["md5Sum"])
 	if userMd5, ok := metadata["md5Sum"]; ok {
 		if userMd5 != "" && userMd5 != calculatedMd5 {
-			RecycleQueue <- maybeObjectToRecycle
-			return result, ErrBadDigest
+			//RecycleQueue <- maybeObjectToRecycle
+			//return result, ErrBadDigest
 		}
 	}
 
@@ -598,8 +598,8 @@ func (yig *YigStorage) PutObject(reqCtx RequestContext, credential common.Creden
 	if signVerifyReader, ok := data.(*signature.SignVerifyReadCloser); ok {
 		credential, err = signVerifyReader.Verify()
 		if err != nil {
-			RecycleQueue <- maybeObjectToRecycle
-			return
+			//RecycleQueue <- maybeObjectToRecycle
+			//return
 		}
 	}
 	// TODO validate bucket policy and fancy ACL
@@ -618,38 +618,38 @@ func (yig *YigStorage) PutObject(reqCtx RequestContext, credential common.Creden
 		NullVersion:      helper.Ternary(bucket.Versioning == "Enabled", false, true).(bool),
 		DeleteMarker:     false,
 		SseType:          sseRequest.Type,
-		EncryptionKey: helper.Ternary(sseRequest.Type == crypto.S3.String(),
-			cipherKey, []byte("")).([]byte),
-		InitializationVector: initializationVector,
-		CustomAttributes:     metadata,
-		Type:                 meta.ObjectTypeNormal,
-		StorageClass:         storageClass,
+		CustomAttributes: metadata,
+		Type:             meta.ObjectTypeNormal,
+		StorageClass:     storageClass,
 	}
 
-	if object.StorageClass == meta.ObjectStorageClassGlacier {
-		freezer, err := yig.MetaStorage.GetFreezer(object.BucketName, object.Name, object.VersionId)
-		if err == nil {
-			err = yig.MetaStorage.DeleteFreezer(freezer)
-			if err != nil {
-				return result, err
-			}
-		} else if err != ErrNoSuchKey {
-			return result, err
-		}
-	}
+	//if object.StorageClass == meta.ObjectStorageClassGlacier {
+	//	freezer, err := yig.MetaStorage.GetFreezer(object.BucketName, object.Name, object.VersionId)
+	//	if err == nil {
+	//		err = yig.MetaStorage.DeleteFreezer(freezer)
+	//		if err != nil {
+	//			return result, err
+	//		}
+	//	} else if err != ErrNoSuchKey {
+	//		return result, err
+	//	}
+	//}
+
+	helper.Logger.Info("看看是不是这里", object)
 
 	result.LastModified = object.LastModifiedTime
-	err = yig.MetaStorage.PutObject(reqCtx, object, nil, true)
+	//err = yig.MetaStorage.PutObject(reqCtx, object, nil, true)
 	if err != nil {
-		RecycleQueue <- maybeObjectToRecycle
+		//RecycleQueue <- maybeObjectToRecycle
 		return
-	} else {
-		yig.MetaStorage.Cache.Remove(redis.ObjectTable, bucketName+":"+objectName+":")
-		yig.DataCache.Remove(bucketName + ":" + objectName + ":" + object.GetVersionId())
-		if reqCtx.ObjectInfo != nil && reqCtx.BucketInfo.Versioning == meta.VersionDisabled {
-			go yig.removeOldObject(reqCtx.ObjectInfo)
-		}
 	}
+	//} else {
+	//	//yig.MetaStorage.Cache.Remove(redis.ObjectTable, bucketName+":"+objectName+":")
+	//	yig.DataCache.Remove(bucketName + ":" + objectName + ":" + object.GetVersionId())
+	//	if reqCtx.ObjectInfo != nil && reqCtx.BucketInfo.Versioning == meta.VersionDisabled {
+	//		//go yig.removeOldObject(reqCtx.ObjectInfo)
+	//	}
+	//}
 
 	return result, nil
 }

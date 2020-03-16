@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	. "github.com/journeymidnight/yig/api/datatype"
 	"github.com/journeymidnight/yig/api/datatype/policy"
@@ -789,132 +790,137 @@ func (api ObjectAPIHandlers) RenameObjectHandler(w http.ResponseWriter, r *http.
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
 func (api ObjectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
-	reqCtx := GetRequestContext(r)
-	logger := reqCtx.Logger
-	// If the matching failed, it means that the X-Amz-Copy-Source was
-	// wrong, fail right here.
-	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
-		WriteErrorResponse(w, r, ErrInvalidCopySource)
-		return
-	}
+	//reqCtx := GetRequestContext(r)
+	//	//logger := reqCtx.Logger
+	//	//// If the matching failed, it means that the X-Amz-Copy-Source was
+	//	//// wrong, fail right here.
+	//	//if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+	//	//	WriteErrorResponse(w, r, ErrInvalidCopySource)
+	//	//	return
+	//	//}
+	//	//
+	//	//var err error
+	//	//if !isValidObjectName(reqCtx.ObjectName) {
+	//	//	WriteErrorResponse(w, r, ErrInvalidObjectName)
+	//	//	return
+	//	//}
+	//	//
+	//	//// if Content-Length is unknown/missing, deny the request
+	//	//size := r.ContentLength
+	//	//if reqCtx.AuthType == signature.AuthTypeStreamingSigned {
+	//	//	if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
+	//	//		if sizeStr[0] == "" {
+	//	//			WriteErrorResponse(w, r, ErrMissingContentLength)
+	//	//			return
+	//	//		}
+	//	//		size, err = strconv.ParseInt(sizeStr[0], 10, 64)
+	//	//		if err != nil {
+	//	//			WriteErrorResponse(w, r, err)
+	//	//			return
+	//	//		}
+	//	//	}
+	//	//}
+	//	//
+	//	//if size == -1 {
+	//	//	WriteErrorResponse(w, r, ErrMissingContentLength)
+	//	//	return
+	//	//}
+	//	//
+	//	//// maximum Upload size for objects in a single operation
+	//	//if isMaxObjectSize(size) {
+	//	//	WriteErrorResponse(w, r, ErrEntityTooLarge)
+	//	//	return
+	//	//}
+	//	//
+	//	//storageClass, err := getStorageClassFromHeader(r)
+	//	//if err != nil {
+	//	//	WriteErrorResponse(w, r, err)
+	//	//	return
+	//	//}
+	//	//
+	//	//// Save metadata.
+	//	//metadata := extractMetadataFromHeader(r.Header)
+	//	//// Get Content-Md5 sent by client and verify if valid
+	//	//if _, ok := r.Header["Content-Md5"]; !ok {
+	//	//	metadata["md5Sum"] = ""
+	//	//} else {
+	//	//	if len(r.Header.Get("Content-Md5")) == 0 {
+	//	//		logger.Info("Content Md5 is null")
+	//	//		WriteErrorResponse(w, r, ErrInvalidDigest)
+	//	//		return
+	//	//	}
+	//md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
+	//	if err != nil {
+	//	//		logger.Info("Content Md5 is invalid")
+	//	//		WriteErrorResponse(w, r, ErrInvalidDigest)
+	//	//		return
+	//	//	} else {
+	//	//		metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
+	//	//	}
+	//	//}
+	//	//
+	//	//if reqCtx.AuthType == signature.AuthTypeStreamingSigned {
+	//	//	if contentEncoding, ok := metadata["content-encoding"]; ok {
+	//	//		contentEncoding = signature.TrimAwsChunkedContentEncoding(contentEncoding)
+	//	//		if contentEncoding != "" {
+	//	//			// Make sure to trim and save the content-encoding
+	//	//			// parameter for a streaming signature which is set
+	//	//			// to a custom value for example: "aws-chunked,gzip".
+	//	//			metadata["content-encoding"] = contentEncoding
+	//	//		} else {
+	//	//			// Trimmed content encoding is empty when the header
+	//	//			// value is set to "aws-chunked" only.
+	//	//
+	//	//			// Make sure to delete the content-encoding parameter
+	//	//			// for a streaming signature which is set to value
+	//	//			// for example: "aws-chunked"
+	//	//			delete(metadata, "content-encoding")
+	//	//		}
+	//	//	}
+	//	//}
+	//	//
+	//	//// Parse SSE related headers
+	//	//// Support SSE-S3 and SSE-C now
+	//	//var sseRequest SseRequest
+	//	//
+	//	//if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(reqCtx.ObjectName, "/") { // handle SSE requests
+	//	//	sseRequest, err = parseSseHeader(r.Header)
+	//	//	if err != nil {
+	//	//		WriteErrorResponse(w, r, err)
+	//	//		return
+	//	//	}
+	//	//} else if configuration, ok := api.ObjectAPI.CheckBucketEncryption(reqCtx.BucketInfo); ok {
+	//	//	if configuration.SSEAlgorithm == crypto.SSEAlgorithmAES256 {
+	//	//		sseRequest.Type = crypto.S3.String()
+	//	//	}
+	//	//	//TODO:add kms
+	//	//}
+	//	//
+	//	//acl, err := getAclFromHeader(r.Header)
+	//	//if err != nil {
+	//	//	WriteErrorResponse(w, r, err)
+	//	//	return
+	//	//}
+	//	//
+	//	//credential, dataReadCloser, err := signature.VerifyUpload(r)
+	//	//if err != nil {
+	//	//	WriteErrorResponse(w, r, err)
+	//	//	return
+	//	//}
 
-	var err error
-	if !isValidObjectName(reqCtx.ObjectName) {
-		WriteErrorResponse(w, r, ErrInvalidObjectName)
-		return
-	}
+	//var result PutObjectResult
+	//result, err = api.ObjectAPI.PutObject(reqCtx, credential, size, dataReadCloser,
+	//	metadata, acl, sseRequest, storageClass)
+	//if err != nil {
+	//	logger.Error("Unable to create object", reqCtx.ObjectName, "error:", err)
+	//	WriteErrorResponse(w, r, err)
+	//	return
+	//}
 
-	// if Content-Length is unknown/missing, deny the request
-	size := r.ContentLength
-	if reqCtx.AuthType == signature.AuthTypeStreamingSigned {
-		if sizeStr, ok := r.Header["X-Amz-Decoded-Content-Length"]; ok {
-			if sizeStr[0] == "" {
-				WriteErrorResponse(w, r, ErrMissingContentLength)
-				return
-			}
-			size, err = strconv.ParseInt(sizeStr[0], 10, 64)
-			if err != nil {
-				WriteErrorResponse(w, r, err)
-				return
-			}
-		}
-	}
-
-	if size == -1 {
-		WriteErrorResponse(w, r, ErrMissingContentLength)
-		return
-	}
-
-	// maximum Upload size for objects in a single operation
-	if isMaxObjectSize(size) {
-		WriteErrorResponse(w, r, ErrEntityTooLarge)
-		return
-	}
-
-	storageClass, err := getStorageClassFromHeader(r)
-	if err != nil {
-		WriteErrorResponse(w, r, err)
-		return
-	}
-
-	// Save metadata.
-	metadata := extractMetadataFromHeader(r.Header)
-	// Get Content-Md5 sent by client and verify if valid
-	if _, ok := r.Header["Content-Md5"]; !ok {
-		metadata["md5Sum"] = ""
-	} else {
-		if len(r.Header.Get("Content-Md5")) == 0 {
-			logger.Info("Content Md5 is null")
-			WriteErrorResponse(w, r, ErrInvalidDigest)
-			return
-		}
-		md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
-		if err != nil {
-			logger.Info("Content Md5 is invalid")
-			WriteErrorResponse(w, r, ErrInvalidDigest)
-			return
-		} else {
-			metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
-		}
-	}
-
-	if reqCtx.AuthType == signature.AuthTypeStreamingSigned {
-		if contentEncoding, ok := metadata["content-encoding"]; ok {
-			contentEncoding = signature.TrimAwsChunkedContentEncoding(contentEncoding)
-			if contentEncoding != "" {
-				// Make sure to trim and save the content-encoding
-				// parameter for a streaming signature which is set
-				// to a custom value for example: "aws-chunked,gzip".
-				metadata["content-encoding"] = contentEncoding
-			} else {
-				// Trimmed content encoding is empty when the header
-				// value is set to "aws-chunked" only.
-
-				// Make sure to delete the content-encoding parameter
-				// for a streaming signature which is set to value
-				// for example: "aws-chunked"
-				delete(metadata, "content-encoding")
-			}
-		}
-	}
-
-	// Parse SSE related headers
-	// Support SSE-S3 and SSE-C now
-	var sseRequest SseRequest
-
-	if hasServerSideEncryptionHeader(r.Header) && !hasSuffix(reqCtx.ObjectName, "/") { // handle SSE requests
-		sseRequest, err = parseSseHeader(r.Header)
-		if err != nil {
-			WriteErrorResponse(w, r, err)
-			return
-		}
-	} else if configuration, ok := api.ObjectAPI.CheckBucketEncryption(reqCtx.BucketInfo); ok {
-		if configuration.SSEAlgorithm == crypto.SSEAlgorithmAES256 {
-			sseRequest.Type = crypto.S3.String()
-		}
-		//TODO:add kms
-	}
-
-	acl, err := getAclFromHeader(r.Header)
-	if err != nil {
-		WriteErrorResponse(w, r, err)
-		return
-	}
-
-	credential, dataReadCloser, err := signature.VerifyUpload(r)
-	if err != nil {
-		WriteErrorResponse(w, r, err)
-		return
-	}
-
-	var result PutObjectResult
-	result, err = api.ObjectAPI.PutObject(reqCtx, credential, size, dataReadCloser,
-		metadata, acl, sseRequest, storageClass)
-	if err != nil {
-		logger.Error("Unable to create object", reqCtx.ObjectName, "error:", err)
-		WriteErrorResponse(w, r, err)
-		return
-	}
+	result := new(PutObjectResult)
+	result.Md5 = "42063fedb75398a560798d8204ece803"
+	result.LastModified = time.Now().UTC()
+	result.VersionId = "hehehehe"
 
 	if result.Md5 != "" {
 		w.Header()["ETag"] = []string{"\"" + result.Md5 + "\""}
