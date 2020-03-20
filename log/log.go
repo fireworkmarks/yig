@@ -3,7 +3,6 @@ package log
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/minio/highwayhash"
 	"io"
 	"log"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/journeymidnight/yig/hashring"
+	"github.com/minio/highwayhash"
 )
 
 type Level int
@@ -39,6 +39,7 @@ func ParseLevel(levelString string) Level {
 }
 
 type Logger struct {
+	loggerHr  *hashring.HashRing
 	out       []io.WriteCloser
 	level     Level
 	logger    []*log.Logger
@@ -47,7 +48,6 @@ type Logger struct {
 }
 
 var (
-	loggerHr *hashring.HashRing
 	logFlags = log.Ldate | log.Ltime | log.Lmicroseconds
 )
 
@@ -60,7 +60,7 @@ func NewFileLogger(paths []string, logLevel Level) Logger {
 	if err != nil {
 		panic(err)
 	}
-	loggerHr = hashring.NewHashRing(hashReplicationCount, hash)
+	loggerHr := hashring.NewHashRing(hashReplicationCount, hash)
 	var files []io.WriteCloser
 	for i, path := range paths {
 		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -73,24 +73,25 @@ func NewFileLogger(paths []string, logLevel Level) Logger {
 			panic(err)
 		}
 	}
-	return NewLogger(files, logLevel)
+	return NewLogger(loggerHr, files, logLevel)
 }
 
-func NewLogger(outs []io.WriteCloser, logLevel Level) Logger {
+func NewLogger(loggerHr *hashring.HashRing, outs []io.WriteCloser, logLevel Level) Logger {
 	var loggerinfo []*log.Logger
 	for _, out := range outs {
 		loggerinfo = append(loggerinfo, log.New(out, "", logFlags))
 	}
 	l := Logger{
-		out:    outs,
-		level:  logLevel,
-		logger: loggerinfo,
+		loggerHr: loggerHr,
+		out:      outs,
+		level:    logLevel,
+		logger:   loggerinfo,
 	}
 	return l
 }
 
 func (l Logger) NewWithRequestID(requestID string) Logger {
-	local, err := GetLocate(requestID)
+	local, err := l.GetLocate(requestID)
 	if err != nil {
 		panic(err)
 	}
@@ -165,8 +166,8 @@ func (l Logger) Close() (err error) {
 	return
 }
 
-func GetLocate(key string) (int, error) {
-	n, err := loggerHr.Locate(key)
+func (l Logger) GetLocate(key string) (int, error) {
+	n, err := l.loggerHr.Locate(key)
 	if err != nil {
 		return 0, err
 	}
