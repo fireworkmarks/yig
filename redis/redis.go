@@ -12,12 +12,13 @@ import (
 	"github.com/cep21/circuit"
 	redigo "github.com/gomodule/redigo/redis"
 	"github.com/journeymidnight/yig/circuitbreak"
+	"github.com/journeymidnight/yig/hashring"
 	"github.com/journeymidnight/yig/helper"
 	"github.com/minio/highwayhash"
 )
 
 var (
-	redisPoolHR *HashRing
+	redisPoolHR *hashring.HashRing
 	redisPools  []*redigo.Pool
 	Circuits    []*circuit.Circuit
 )
@@ -61,7 +62,15 @@ func Initialize() {
 	if helper.CONFIG.RedisPassword != "" {
 		options = append(options, redigo.DialPassword(helper.CONFIG.RedisPassword))
 	}
-	redisPoolHR = NewHashRing(hashReplicationCount, New32())
+	key, err := hex.DecodeString(keyvalue)
+	if err != nil {
+		panic(err)
+	}
+	hash, err := highwayhash.New64(key)
+	if err != nil {
+		panic(err)
+	}
+	redisPoolHR = hashring.NewHashRing(hashReplicationCount, hash)
 	for i, addr := range helper.CONFIG.RedisGroup {
 		initPool(i, addr, options...)
 	}

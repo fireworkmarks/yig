@@ -1,12 +1,16 @@
 package log
 
 import (
+	"encoding/hex"
 	"fmt"
+	"github.com/minio/highwayhash"
 	"io"
 	"log"
 	"os"
 	"runtime"
 	"strings"
+
+	"github.com/journeymidnight/yig/hashring"
 )
 
 type Level int
@@ -16,6 +20,10 @@ const (
 	WarnLevel  Level = 1 // Errors could be ignored; messages might need noticed
 	InfoLevel  Level = 2 // Informational messages
 )
+
+const hashReplicationCount = 4096
+
+const keyvalue = "000102030405060708090A0B0C0D0E0FF0E0D0C0B0A090807060504030201000" // This is the key for hash sum !
 
 func ParseLevel(levelString string) Level {
 	switch strings.ToLower(levelString) {
@@ -31,37 +39,67 @@ func ParseLevel(levelString string) Level {
 }
 
 type Logger struct {
-	out       io.WriteCloser
+	out       []io.WriteCloser
 	level     Level
-	logger    *log.Logger
+	logger    []*log.Logger
 	requestID string
+	local     int
 }
 
-var logFlags = log.Ldate | log.Ltime | log.Lmicroseconds
+var (
+	loggerHr *hashring.HashRing
+	logFlags = log.Ldate | log.Ltime | log.Lmicroseconds
+)
 
-func NewFileLogger(path string, logLevel Level) Logger {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+func NewFileLogger(paths []string, logLevel Level) Logger {
+	key, err := hex.DecodeString(keyvalue)
 	if err != nil {
-		panic("Failed to open log file " + path)
+		panic(err)
 	}
-	return NewLogger(f, logLevel)
+	hash, err := highwayhash.New64(key)
+	if err != nil {
+		panic(err)
+	}
+	loggerHr = hashring.NewHashRing(hashReplicationCount, hash)
+	var files []io.WriteCloser
+	for i, path := range paths {
+		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			panic("Failed to open log file " + path)
+		}
+		files = append(files, f)
+		err = loggerHr.Add(i)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return NewLogger(files, logLevel)
 }
 
-func NewLogger(out io.WriteCloser, logLevel Level) Logger {
+func NewLogger(outs []io.WriteCloser, logLevel Level) Logger {
+	var loggerinfo []*log.Logger
+	for _, out := range outs {
+		loggerinfo = append(loggerinfo, log.New(out, "", logFlags))
+	}
 	l := Logger{
-		out:    out,
+		out:    outs,
 		level:  logLevel,
-		logger: log.New(out, "", logFlags),
+		logger: loggerinfo,
 	}
 	return l
 }
 
 func (l Logger) NewWithRequestID(requestID string) Logger {
+	local, err := GetLocate(requestID)
+	if err != nil {
+		panic(err)
+	}
 	return Logger{
 		out:       l.out,
 		level:     l.level,
 		logger:    l.logger,
 		requestID: requestID,
+		local:     local,
 	}
 }
 
@@ -91,7 +129,7 @@ func (l Logger) Info(args ...interface{}) {
 	prefixArray := l.prefixArray()
 	prefixArray = append(prefixArray, "[INFO]")
 	args = append(prefixArray, args...)
-	l.logger.Println(args...)
+	l.logger[l.local].Println(args...)
 }
 
 func (l Logger) Warn(args ...interface{}) {
@@ -101,7 +139,7 @@ func (l Logger) Warn(args ...interface{}) {
 	prefixArray := l.prefixArray()
 	prefixArray = append(prefixArray, "[WARN]")
 	args = append(prefixArray, args...)
-	l.logger.Println(args...)
+	l.logger[l.local].Println(args...)
 }
 
 func (l Logger) Error(args ...interface{}) {
@@ -111,15 +149,26 @@ func (l Logger) Error(args ...interface{}) {
 	prefixArray := l.prefixArray()
 	prefixArray = append(prefixArray, "[ERROR]")
 	args = append(prefixArray, args...)
-	l.logger.Println(args...)
+	l.logger[l.local].Println(args...)
 }
 
 // Write a new line with args. Unless you really want to customize
 // output format, use "Info", "Warn", "Error" instead
 func (l Logger) Println(args ...interface{}) {
-	_, _ = l.out.Write([]byte(fmt.Sprintln(args...)))
+	_, _ = l.out[0].Write([]byte(fmt.Sprintln(args...)))
 }
 
-func (l Logger) Close() error {
-	return l.out.Close()
+func (l Logger) Close() (err error) {
+	for _, out := range l.out {
+		err = out.Close()
+	}
+	return
+}
+
+func GetLocate(key string) (int, error) {
+	n, err := loggerHr.Locate(key)
+	if err != nil {
+		return 0, err
+	}
+	return n.(int), nil
 }

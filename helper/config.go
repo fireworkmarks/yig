@@ -17,8 +17,8 @@ type Config struct {
 	Region               string                  `toml:"region"`   // Region name this instance belongs to, e.g cn-bj-1
 	Plugins              map[string]PluginConfig `toml:"plugins"`
 	PiggybackUpdateUsage bool                    `toml:"piggyback_update_usage"`
-	LogPath              string                  `toml:"log_path"`
-	AccessLogPath        string                  `toml:"access_log_path"`
+	LogPath              []string                `toml:"log_path"`
+	AccessLogPath        []string                `toml:"access_log_path"`
 	AccessLogFormat      string                  `toml:"access_log_format"`
 	PanicLogPath         string                  `toml:"panic_log_path"`
 	PidFile              string                  `toml:"pid_file"`

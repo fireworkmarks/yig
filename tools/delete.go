@@ -120,7 +120,7 @@ func main() {
 	helper.SetupConfig()
 	logLevel := log.ParseLevel(helper.CONFIG.LogLevel)
 
-	helper.Logger = log.NewFileLogger(DEFAULT_DELETE_LOG_PATH, logLevel)
+	helper.Logger = log.NewFileLogger([]string{DEFAULT_DELETE_LOG_PATH}, logLevel)
 	defer helper.Logger.Close()
 	gcTaskQ = make(chan types.GarbageCollection, TASKQ_MAX_LENGTH)
 	signal.Ignore()
