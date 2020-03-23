@@ -43,7 +43,7 @@ func main() {
 	helper.Logger.Info("YIG conf:", helper.CONFIG)
 	helper.Logger.Info("YIG instance ID:", helper.CONFIG.InstanceId)
 	// access log
-	helper.AccessLogger = log.NewFileLogger(helper.CONFIG.AccessLogPath, log.InfoLevel)
+	helper.AccessLogger = log.NewFileLogger(helper.CONFIG.AccessLogPath, log.ParseLevel("info"))
 	defer helper.AccessLogger.Close()
 
 	if helper.CONFIG.MetaCacheType > 0 || helper.CONFIG.EnableDataCache {

@@ -240,7 +240,7 @@ func main() {
 	helper.SetupConfig()
 	logLevel := log.ParseLevel(helper.CONFIG.LogLevel)
 
-	helper.Logger = log.NewFileLogger([]string{DEFAULT_LC_LOG_PATH}, logLevel)
+	helper.Logger = log.NewFileLogger(DEFAULT_LC_LOG_PATH, logLevel)
 	defer helper.Logger.Close()
 	if helper.CONFIG.MetaCacheType > 0 || helper.CONFIG.EnableDataCache {
 		redis.Initialize()
