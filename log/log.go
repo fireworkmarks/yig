@@ -38,12 +38,13 @@ func NewFileLogger(path string, logLevel log.Level) Logger {
 	return NewLogger(file, logLevel)
 }
 
-func NewLogger(outs io.WriteCloser, logLevel log.Level) Logger {
+func NewLogger(out io.WriteCloser, logLevel log.Level) Logger {
 	logger := log.New()
 	formatter := log.TextFormatter{TimestampFormat: "2006-01-02 15:04:05"}
 	logger.SetFormatter(&formatter)
+	logger.Out = out
 	l := Logger{
-		out:    outs,
+		out:    out,
 		level:  logLevel,
 		logger: logger,
 	}
